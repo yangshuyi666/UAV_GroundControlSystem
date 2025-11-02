@@ -4,46 +4,23 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
 # Dependency directories
 node_modules/
 
-# Build outputs
-dist
-dist-ssr
-coverage
-
-# Environment variables
-.env
-.env.local
-.env.*.local
-
-# Local config files
-*.local
-.DS_Store
-
-# Cypress
-/cypress/videos/
-/cypress/screenshots/
-
-# Vite cache
-node_modules/.vite
+# Build output
+dist/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+!.vscode/settings.json
+.idea/
+.DS_Store
 
-# TypeScript
-*.tsbuildinfo
+# Local environment files
+.env.local
+.env.*.local
 
-# Package manager config
-.npmrc
-.yarnrc
+# System files
+Thumbs.db
