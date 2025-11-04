@@ -46,7 +46,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('userID');
   if (to.meta.requiresAuth && !token) {
     next('/login'); // 未登录跳转登录页
   } else {

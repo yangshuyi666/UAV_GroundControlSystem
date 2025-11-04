@@ -79,7 +79,8 @@ onMounted(() => {
             width: "120px",
             height: "120px",
             showRectangle: true,
-            autoMove: true
+            autoMove: true,
+            borderRadius: "10px",
         });
         map.addControl(hawkEye);
     });
@@ -102,7 +103,7 @@ function updateMapStyle(style) {
 }
 
 // ========================================================================
-// 🟢 核心：规划模式控制
+// 规划模式控制
 // ========================================================================
 function startPlanning() {
     if (isFlying.value) {

@@ -1,15 +1,36 @@
 <template>
     <el-card class="photo-card" shadow="hover">
-        <el-image :src="photo.url" fit="cover" lazy class="photo-img" :preview-src-list="[photo.url]" />
+        <el-image :src="photo.frame_preview" fit="cover" lazy class="photo-img"
+            :preview-src-list="[photo.frame_preview]" />
 
         <div class="photo-info">
-            <div class="time">{{ formatTime(photo.time) }}</div>
-            <div class="location">📍 {{ photo.latitude.toFixed(5) }}, {{ photo.longitude.toFixed(5) }}</div>
+            <div class="row">
+                <span class="label">ID：</span>
+                <span class="value">{{ photo.image_id }}</span>
+            </div>
+            <div class="row">
+                <span class="label">时间：</span>
+                <span class="value">{{ photo.capture_time }}</span>
+            </div>
+            <div class="row">
+                <span class="label">描述：</span>
+                <span class="value" :title="photo.desc">{{ photo.desc || '（无）' }}</span>
+            </div>
+            <div class="row">
+                <span class="label">地点：</span>
+                <span class="value" :title="photo.location">📍 {{ photo.location || '（未知）' }}</span>
+            </div>
         </div>
 
         <div class="actions">
             <el-button type="danger" size="small" plain @click="handleDelete">
                 删除
+            </el-button>
+            <el-button type="primary" size="small" plain @click="handleDownload">
+                下载
+            </el-button>
+            <el-button size="small" plain @click="handleEditDesc">
+                修改描述
             </el-button>
         </div>
     </el-card>
@@ -25,7 +46,7 @@ const props = defineProps({
         required: true
     }
 })
-const emit = defineEmits(['delete'])
+const emit = defineEmits(['delete', 'download', 'edit'])
 
 const handleDelete = () => {
     ElMessageBox.confirm('确定要删除这张照片吗？', '提示', {
@@ -33,32 +54,47 @@ const handleDelete = () => {
         cancelButtonText: '取消',
         type: 'warning'
     })
-        .then(() => emit('delete', props.photo.id))
+        .then(() => emit('delete', props.photo.image_id))
         .catch(() => { }) // 用户取消
 }
 
-const formatTime = (time) => {
-    const date = new Date(time)
-    return date.toLocaleString('zh-CN', { hour12: false })
+const handleDownload = () => {
+    emit('download', props.photo.image_id)
+}
+
+const handleEditDesc = async () => {
+    try {
+        const { value } = await ElMessageBox.prompt('请输入新的描述', '修改描述', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            inputValue: props.photo.desc || ''
+        })
+        emit('edit', { image_id: props.photo.image_id, newDesc: value || '' })
+    } catch {
+        // 取消
+    }
 }
 </script>
 
 <style scoped>
+/* 宽度改为 100%，用于纵向列表单列展示 */
 .photo-card {
-    width: 280px;
+    width: 100%;
     border-radius: 10px;
     overflow: hidden;
     transition: transform 0.2s ease;
 }
 
 .photo-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-2px);
 }
 
 .photo-img {
     width: 100%;
-    height: 180px;
+    height: 280px;
+    /* 适当增大高度以更好展示 */
     border-radius: 8px;
+    object-fit: cover;
 }
 
 .photo-info {
@@ -67,8 +103,29 @@ const formatTime = (time) => {
     color: #555;
 }
 
+.row {
+    display: flex;
+    line-height: 20px;
+    margin: 2px 0;
+}
+
+.label {
+    color: #888;
+    width: 44px;
+    flex: 0 0 44px;
+}
+
+.value {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .actions {
-    margin-top: 6px;
-    text-align: right;
+    margin-top: 8px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
 }
 </style>

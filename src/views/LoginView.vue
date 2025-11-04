@@ -54,7 +54,7 @@ const handleLogin = () => {
         try {
             const res = await axios.post('/login', form.value)
             if (res.data?.token) {
-                localStorage.setItem('token', res.data.token)
+                localStorage.setItem('userID', res.data.userID)
                 ElMessage.success('登录成功！')
                 router.push('/')
             } else {
