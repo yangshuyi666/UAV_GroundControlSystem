@@ -1,7 +1,7 @@
 <template>
     <div class="photo-album">
         <div class="header">
-            <h2>📷 照片相册</h2>
+            <h2>📷 相册</h2>
 
             <div class="ops">
                 <el-input-number v-model="limit" :min="1" :max="500" size="small" :step="5" controls-position="right"

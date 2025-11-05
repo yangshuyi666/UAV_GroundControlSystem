@@ -4,6 +4,7 @@ const store = createStore({
     state: {
         mapStyle: 'normal',
         isPlanning: false,
+        controlModel: 'Automatic',
     },
     mutations: {
         setMapStyle(state, style) {
