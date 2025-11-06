@@ -5,6 +5,37 @@
         </el-col>
 
         <el-col :span="8" style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+            <!-- 无人机状态面板 -->
+            <div class="uav-status">
+                <h3>无人机状态</h3>
+                <div v-if="uavStatus">
+                    <div>位置：{{ (uavStatus.lat ?? 0).toFixed(6) }}, {{ (uavStatus.lng ?? 0).toFixed(6) }}</div>
+                    <div>高度：{{ uavStatus.altitude ?? '—' }} m</div>
+                    <div>速度：{{ uavStatus.speed ?? '—' }} km/h</div>
+                    <div>电量：{{ uavStatus.battery ?? '—' }}%</div>
+                    <div>状态：
+                        <b
+                            :style="{ color: uavStatus.status === 'flying' ? '#1677ff' : (uavStatus.status === 'paused' ? '#fa8c16' : '#666') }">
+                            {{ uavStatus.status || '—' }}
+                        </b>
+                    </div>
+                    <div>时间：{{ uavStatus.timestamp || '—' }}</div>
+                </div>
+                <div v-else>等待连接或飞行未开始</div>
+            </div>
+
+            <!-- 飞行参数 -->
+            <div class="uav-params">
+                <div class="param-item">
+                    <span class="label">用户ID</span>
+                    <el-input-number v-model="userId" :min="1" :step="1" controls-position="right" />
+                </div>
+                <div class="param-item">
+                    <span class="label">速度(km/h)</span>
+                    <el-input-number v-model="speed" :min="1" :max="100" :step="1" controls-position="right" />
+                </div>
+            </div>
+
             <el-button id="PlanStart" type="primary" :disabled="store.state.isPlanning || isFlying"
                 @click="startPlanning">
                 开始规划
@@ -15,26 +46,31 @@
                 清空规划
             </el-button>
 
+            <!-- 开始飞行：改为后端驱动 + WebSocket 推送 -->
             <el-button id="StartFly" type="success" @click="startFly" :disabled="store.state.isPlanning">
                 开始飞行
             </el-button>
 
-            <el-button id="PauseFly" type="info" @click="pauseFly" :disabled="!isFlying">
+            <el-button id="PauseFly" type="info" @click="pauseFly" :disabled="!isFlying || isPaused">
                 暂停飞行
             </el-button>
 
-            <el-button id="ResumeFly" type="primary" @click="resumeFly" :disabled="!isPaused">
+            <el-button id="ResumeFly" type="primary" @click="resumeFly" :disabled="!isFlying || !isPaused">
                 继续飞行
             </el-button>
 
+            <el-button id="StopFly" type="danger" @click="stopFly" :disabled="!isFlying">
+                终止飞行
+            </el-button>
         </el-col>
     </el-row>
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from "vue";
+import { onMounted, ref, watch, onUnmounted } from "vue";
 import { useStore } from "vuex";
 import { ElMessage } from "element-plus";
+import axios from "@/api/request";
 
 import StartIcon from "@/assets/StartPoint.png";
 import EndIcon from "@/assets/EndPoint.png";
@@ -51,8 +87,16 @@ let distanceTexts = [];
 let totalText = null;
 let isEditing = false;
 
-
-
+// === 无人机状态 & 后端交互 ===
+let uavMarker = null;          // 无人机Marker
+let passedPolyline = null;     // 已飞过路径
+let ws = null;                 // WebSocket 连接
+let lastPathLength = 0;        // 已追加的轨迹点数（性能优化）
+const isFlying = ref(false);
+const isPaused = ref(false);
+const uavStatus = ref(null);
+const userId = ref(Number(localStorage.getItem("userID")) || 1);
+const speed = ref(5);
 
 // ========== 初始化地图 ==========
 onMounted(() => {
@@ -86,7 +130,7 @@ onMounted(() => {
     });
 
     updateMapStyle(store.state.mapStyle);
-    setTimeout(restorePlanningData, 500)
+    setTimeout(restorePlanningData, 500);
 });
 
 // ========== 图层样式监听 ==========
@@ -95,10 +139,11 @@ watch(() => store.state.mapStyle, (newStyle) => updateMapStyle(newStyle));
 function updateMapStyle(style) {
     if (!map || !AMap) return;
     if (!satelliteLayer) satelliteLayer = new AMap.TileLayer.Satellite();
+    // 下方 hasLayer 在旧版 AMap 可能不可用，若报错可直接 add/remove 不做判断
     if (style === "satellite") {
-        if (!map.hasLayer(satelliteLayer)) map.add(satelliteLayer);
+        if (!map.hasLayer || !map.hasLayer(satelliteLayer)) map.add(satelliteLayer);
     } else {
-        if (map.hasLayer(satelliteLayer)) map.remove(satelliteLayer);
+        if (!map.hasLayer || map.hasLayer(satelliteLayer)) map.remove(satelliteLayer);
     }
 }
 
@@ -111,7 +156,7 @@ function startPlanning() {
         return;
     }
 
-    // 🧹 清除无人机与飞行轨迹
+    // 清除无人机与飞行轨迹
     if (uavMarker) {
         map.remove(uavMarker);
         uavMarker = null;
@@ -124,7 +169,7 @@ function startPlanning() {
     store.commit("setIsPlanning", true);
     setEditing(true);
 
-    // 若已有路径，则让节点可编辑
+    // 若已有路径，让节点可编辑
     markers.forEach(marker => {
         marker.setDraggable(true);
         marker.setCursor("move");
@@ -163,7 +208,7 @@ function setEditing(enabled) {
 }
 
 // ========================================================================
-// 🟡 节点操作逻辑
+// 节点操作逻辑
 // ========================================================================
 function handleAddPoint(e) {
     if (!isEditing) return;
@@ -240,7 +285,7 @@ function disableMarkers() {
 }
 
 // ========================================================================
-// 🔵 绘制路径与计算距离
+// 绘制路径与计算距离
 // ========================================================================
 function redrawPath() {
     if (line) line.setMap(null);
@@ -289,10 +334,10 @@ function redrawPath() {
 }
 
 // ========================================================================
-// 🧹 清空规划
+// 清空规划
 // ========================================================================
 function clearPlanning() {
-    // 🧹 清除无人机与飞行轨迹
+    // 清除无人机与飞行轨迹
     if (uavMarker) {
         map.remove(uavMarker);
         uavMarker = null;
@@ -320,15 +365,15 @@ function clearPlanning() {
 }
 
 // ========================================================================
-//本地持久化
+// 本地持久化
 // ========================================================================
 function savePlanningData() {
     const data = markers.map((marker) => {
         const pos = marker.getPosition();
         let type = "经";
-        const icon = marker.getIcon()?.getImage();
-        if (icon?.includes("StartPoint")) type = "起";
-        else if (icon?.includes("EndPoint")) type = "终";
+        const icon = marker.getIcon()?.getImage?.();
+        if (icon?.includes?.("StartPoint")) type = "起";
+        else if (icon?.includes?.("EndPoint")) type = "终";
         return { lng: pos.lng, lat: pos.lat, type };
     });
 
@@ -375,21 +420,19 @@ function createTextIcon(text) {
 }
 
 // ========================================================================
-// 无人机飞行控制
+// 无人机飞行：后端驱动 + WebSocket 状态推送
 // ========================================================================
-
-let uavMarker = null;          // 无人机Marker
-let passedPolyline = null;     // 已飞行过路径
-let isFlying = ref(false);
-let isPaused = ref(false);
-
-function startFly() {
+async function startFly() {
     if (!map || markers.length < 2) {
         ElMessage.warning("尚未规划路径，无法开始飞行！");
         return;
     }
+    if (!speed.value || speed.value <= 0) {
+        ElMessage.warning("请设置有效飞行速度");
+        return;
+    }
 
-    // 若已有无人机 marker，清理旧状态
+    // 清理旧 UAV & 轨迹
     if (uavMarker) {
         map.remove(uavMarker);
         uavMarker = null;
@@ -399,77 +442,158 @@ function startFly() {
         passedPolyline = null;
     }
 
-    const path = markers.map(m => m.getPosition());
+    // 取路径（AMap 为 [lng,lat]）
+    const pathLngLat = markers.map(m => m.getPosition());
+    const startPos = pathLngLat[0];
 
-    const UAVIcon = new AMap.Icon({
-        image: uavIcon,
-        imageSize: new AMap.Size(32, 32),
-    });
-
-    // 创建无人机 marker
+    // 创建 UAV Marker 与已飞行轨迹
+    const UAVIcon = new AMap.Icon({ image: uavIcon, imageSize: new AMap.Size(32, 32) });
     uavMarker = new AMap.Marker({
         map,
-        position: path[0],
+        position: startPos,
         icon: UAVIcon,
         anchor: "bottom-center",
     });
-
-    // 经过路径线
     passedPolyline = new AMap.Polyline({
         map,
         strokeColor: "#00cc66",
         strokeWeight: 4,
+        path: [startPos],
     });
+    lastPathLength = 1;
 
-    // 保证动画功能插件加载
-    AMap.plugin("AMap.MoveAnimation", () => {
-        isFlying.value = true;
-        isPaused.value = false;
-
-        uavMarker.on("moving", (e) => {
-            passedPolyline.setPath(e.passedPath);
-            // 视角跟随
-            map.setCenter(e.target.getPosition(), true);
-
+    try {
+        // 后端预期为 [lat, lng]
+        const pathLatLng = pathLngLat.map(p => [p.lat, p.lng]);
+        const res = await axios.post("/v1/drone/path", {
+            user_id: userId.value,
+            path: pathLatLng,
+            speed: speed.value
         });
-        // map.setFitView(line);
-        uavMarker.moveAlong(path, {
-            duration: 500 * path.length,  // 每段500ms，可调整
-            autoRotation: true,
-        });
+        console.log(res.data.message);
+        if (res.data?.status === "success") {
+            ElMessage.success("路径已发送，无人机开始飞行");
+            isFlying.value = true;
+            isPaused.value = false;
+            connectWebSocket();
+        } else {
+            throw new Error(res.data?.detail || "后端未返回成功状态");
+        }
+    } catch (err) {
+        console.error(err);
+        ElMessage.error("发送路径失败");
+    }
+}
 
-        // 自动停止事件
-        uavMarker.on("moveend", () => {
-            const current = uavMarker.getPosition();
-            const last = path[path.length - 1];
+function connectWebSocket() {
+    // 关闭旧连接
+    if (ws) {
+        ws.close();
+    }
+    ws = new WebSocket("ws://localhost:8000/api/v1/drone/ws");
 
-            // 仅当到达最后一个点时才重置状态
-            if (
-                Math.abs(current.lng - last.lng) < 1e-6 &&
-                Math.abs(current.lat - last.lat) < 1e-6
-            ) {
+    ws.onopen = () => {
+        ElMessage.success("WebSocket连接成功");
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            uavStatus.value = data;
+
+            const s = data.status;
+            isFlying.value = (s === "flying" || s === "paused");
+            isPaused.value = (s === "paused");
+
+            // 更新 UAV 位置（后端推送为 lat/lng，AMap 需要 [lng, lat]）
+            if (uavMarker) {
+                const lnglat = [data.lng, data.lat];
+                console.log("uavMarker.setPosition", lnglat);
+                uavMarker.setPosition(lnglat);
+
+                // 轨迹追加（可按需抽样）
+                if (passedPolyline) {
+                    const current = passedPolyline.getPath();
+                    current.push(new AMap.LngLat(lnglat[0], lnglat[1]));
+                    if (current.length > lastPathLength) {
+                        passedPolyline.setPath(current);
+                        lastPathLength = current.length;
+                    }
+                }
+
+                // 跟随视角（可注释掉）
+                map.setCenter(lnglat, true);
+            }
+
+            // 若后端状态返回 idle/finished，可在此重置按钮状态
+            if (s === "idle" || s === "finished") {
                 isFlying.value = false;
                 isPaused.value = false;
             }
-        });
-    });
+        } catch (e) {
+            console.error("WS 数据解析失败", e);
+        }
+    };
+
+    ws.onclose = (event) => {
+        ws = null;
+        // 若飞行未主动停止，且连接异常关闭，可以选择尝试重连
+    };
+
+    ws.onerror = (e) => {
+        console.error("WS 错误", e);
+    };
 }
 
-function pauseFly() {
-    if (!uavMarker || !isFlying.value) return;
-    uavMarker.pauseMove();
-    isPaused.value = true;
-    ElMessage.info("已暂停飞行。");
-    console.log(uavMarker.getPosition());
+async function pauseFly() {
+    try {
+        const res = await axios.post("/v1/drone/pause");
+        if (res.data?.status === "success") {
+            isPaused.value = true;
+            ElMessage.success("已暂停飞行");
+        }
+    } catch (e) {
+        ElMessage.error("暂停失败");
+    }
 }
 
-function resumeFly() {
-    if (!uavMarker || !isPaused.value) return;
-    uavMarker.resumeMove();
-    isPaused.value = false;
-    ElMessage.success("继续飞行。");
+async function resumeFly() {
+    try {
+        const res = await axios.post("/v1/drone/resume");
+        if (res.data?.status === "success") {
+            isPaused.value = false;
+            ElMessage.success("继续飞行");
+        }
+    } catch (e) {
+        ElMessage.error("继续失败");
+    }
 }
 
+async function stopFly() {
+    try {
+        const res = await axios.post("/v1/drone/stop");
+        if (res.data?.status === "success") {
+            ElMessage.success("终止飞行成功");
+        }
+    } catch (e) {
+        ElMessage.error("终止失败");
+    } finally {
+        isFlying.value = false;
+        isPaused.value = false;
+        if (ws) {
+            try { ws.close(1000, "user stop"); } catch { }
+            ws = null;
+        }
+    }
+}
+
+// 组件卸载时清理 WS
+onUnmounted(() => {
+    if (ws) {
+        try { ws.close(1000, "component unmount"); } catch { }
+        ws = null;
+    }
+});
 </script>
 
 <style scoped>
@@ -477,5 +601,37 @@ function resumeFly() {
     width: 100%;
     height: 100%;
     min-height: 500px;
+}
+
+.uav-status {
+    border: 1px solid #e5e6eb;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fafafa;
+}
+
+.uav-status h3 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #333;
+}
+
+.uav-params {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.param-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.param-item .label {
+    width: 90px;
+    color: #666;
+    font-size: 13px;
 }
 </style>

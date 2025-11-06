@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from '@/api/request.js'
 import { useRouter } from 'vue-router'
@@ -52,7 +52,7 @@ const handleLogin = () => {
         if (!valid) return
         loading.value = true
         try {
-            const res = await axios.post('/login', form.value)
+            const res = await axios.post('/v1/user/login', form.value)
             if (res.data?.userID) {
                 localStorage.setItem('userID', res.data.userID)
                 ElMessage.success('登录成功！')
@@ -67,6 +67,7 @@ const handleLogin = () => {
         }
     })
 }
+
 </script>
 
 <style scoped>
