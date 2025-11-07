@@ -52,9 +52,14 @@ const handleLogin = () => {
         if (!valid) return
         loading.value = true
         try {
-            const res = await axios.post('/v1/user/login', form.value)
-            if (res.data?.userID) {
-                localStorage.setItem('userID', res.data.userID)
+            const res = await axios.post('/v1/users/login',
+                {
+                    account: form.value.username,
+                    password: form.value.password
+                }
+            )
+            if (res.data?.data?.user_id) {
+                localStorage.setItem('userID', res.data.data.user_id)
                 ElMessage.success('登录成功！')
                 router.push('/')
             } else {

@@ -70,8 +70,8 @@ const handleSignup = () => {
         if (!valid) return
         loading.value = true
         try {
-            const res = await axios.post('/signup', {
-                username: form.value.username,
+            const res = await axios.post('/v1/users/register', {
+                account: form.value.username,
                 password: form.value.password
             })
             if (res.data?.success) {

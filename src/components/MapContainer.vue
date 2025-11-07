@@ -4,18 +4,38 @@
             <div id="Container"></div>
         </el-col>
 
-        <el-col :span="8" style="padding: 20px; display: flex; flex-direction: column; gap: 10px;">
+        <el-col :span="8" class="control-panel">
             <!-- 无人机状态面板 -->
             <div class="uav-status">
-                <h3>无人机状态</h3>
+                <h3>无人机状态（用户ID：{{ userId }}）</h3>
                 <div v-if="uavStatus">
-                    <div>位置：{{ (uavStatus.lat ?? 0).toFixed(6) }}, {{ (uavStatus.lng ?? 0).toFixed(6) }}</div>
+                    <div>经纬度：（{{ (uavStatus.lat ?? 0).toFixed(6) }}, {{ (uavStatus.lng ?? 0).toFixed(6) }}）</div>
                     <div>高度：{{ uavStatus.altitude ?? '—' }} m</div>
                     <div>速度：{{ uavStatus.speed ?? '—' }} km/h</div>
-                    <div>电量：{{ uavStatus.battery ?? '—' }}%</div>
-                    <div>状态：
-                        <b
-                            :style="{ color: uavStatus.status === 'flying' ? '#1677ff' : (uavStatus.status === 'paused' ? '#fa8c16' : '#666') }">
+
+                    <!-- 电量显示 -->
+                    <div>
+                        电量：
+                        <b :style="{
+                            color:
+                                uavStatus.battery < 30
+                                    ? '#ff4d4f'
+                                    : '#52c41a',
+                        }">
+                            {{ uavStatus.battery ?? '—' }}%
+                        </b>
+                    </div>
+
+                    <div>
+                        状态：
+                        <b :style="{
+                            color:
+                                uavStatus.status === 'flying'
+                                    ? '#1677ff'
+                                    : uavStatus.status === 'paused'
+                                        ? '#fa8c16'
+                                        : '#666',
+                        }">
                             {{ uavStatus.status || '—' }}
                         </b>
                     </div>
@@ -24,44 +44,55 @@
                 <div v-else>等待连接或飞行未开始</div>
             </div>
 
-            <!-- 飞行参数 -->
-            <div class="uav-params">
+            <!-- 飞行参数滑块 -->
+            <div class="uav-params card-section">
+                <h4>飞行参数设置</h4>
                 <div class="param-item">
-                    <span class="label">用户ID</span>
-                    <el-input-number v-model="userId" :min="1" :step="1" controls-position="right" />
-                </div>
-                <div class="param-item">
-                    <span class="label">速度(km/h)</span>
-                    <el-input-number v-model="speed" :min="1" :max="100" :step="1" controls-position="right" />
+                    <span class="label">速度 (km/h)</span>
+                    <el-slider v-model="speed" :min="0.5" :max="20" :step="0.5" show-input input-size="small" />
                 </div>
             </div>
 
-            <el-button id="PlanStart" type="primary" :disabled="store.state.isPlanning || isFlying"
-                @click="startPlanning">
-                开始规划
-            </el-button>
+            <!-- 控制按钮 -->
+            <div class="control-buttons card-section">
+                <el-row :gutter="10">
+                    <el-col :span="8">
+                        <el-button id="PlanStart" type="primary" plain block
+                            :disabled="store.state.isPlanning || isFlying" @click="startPlanning">
+                            开始规划
+                        </el-button>
+                    </el-col>
+                    <el-col :span="8">
+                        <el-button id="PlanClear" type="warning" plain block
+                            :disabled="store.state.isPlanning || isFlying" @click="clearPlanning">
+                            清空规划
+                        </el-button>
+                    </el-col>
+                    <el-col :span="8">
+                        <el-button id="StartFly" type="success" block @click="startFly"
+                            :disabled="store.state.isPlanning">
+                            开始飞行
+                        </el-button>
+                    </el-col>
 
-            <el-button id="PlanClear" type="warning" @click="clearPlanning"
-                :disabled="store.state.isPlanning || isFlying">
-                清空规划
-            </el-button>
-
-            <!-- 开始飞行：改为后端驱动 + WebSocket 推送 -->
-            <el-button id="StartFly" type="success" @click="startFly" :disabled="store.state.isPlanning">
-                开始飞行
-            </el-button>
-
-            <el-button id="PauseFly" type="info" @click="pauseFly" :disabled="!isFlying || isPaused">
-                暂停飞行
-            </el-button>
-
-            <el-button id="ResumeFly" type="primary" @click="resumeFly" :disabled="!isFlying || !isPaused">
-                继续飞行
-            </el-button>
-
-            <el-button id="StopFly" type="danger" @click="stopFly" :disabled="!isFlying">
-                终止飞行
-            </el-button>
+                    <el-col :span="8">
+                        <el-button id="PauseFly" type="info" block @click="pauseFly" :disabled="!isFlying || isPaused">
+                            暂停
+                        </el-button>
+                    </el-col>
+                    <el-col :span="8">
+                        <el-button id="ResumeFly" type="primary" block @click="resumeFly"
+                            :disabled="!isFlying || !isPaused">
+                            继续
+                        </el-button>
+                    </el-col>
+                    <el-col :span="8">
+                        <el-button id="StopFly" type="danger" block @click="stopFly" :disabled="!isFlying">
+                            终止
+                        </el-button>
+                    </el-col>
+                </el-row>
+            </div>
         </el-col>
     </el-row>
 </template>
@@ -95,8 +126,8 @@ let lastPathLength = 0;        // 已追加的轨迹点数（性能优化）
 const isFlying = ref(false);
 const isPaused = ref(false);
 const uavStatus = ref(null);
-const userId = ref(Number(localStorage.getItem("userID")) || 1);
-const speed = ref(5);
+const userId = ref(Number(localStorage.getItem("userID")) || 3);
+const speed = ref(1);
 
 // ========== 初始化地图 ==========
 onMounted(() => {
@@ -385,7 +416,6 @@ function restorePlanningData() {
     const data = JSON.parse(raw);
 
     if (data.length === 0) {
-        console.log("没有保存的规划数据。");
         return;
     }
 
@@ -465,19 +495,20 @@ async function startFly() {
     try {
         // 后端预期为 [lat, lng]
         const pathLatLng = pathLngLat.map(p => [p.lat, p.lng]);
+        console.log(pathLatLng);
         const res = await axios.post("/v1/drone/path", {
             user_id: userId.value,
             path: pathLatLng,
             speed: speed.value
         });
-        console.log(res.data.message);
-        if (res.data?.status === "success") {
+        console.log(res.data);
+        if (res.data?.success) {
             ElMessage.success("路径已发送，无人机开始飞行");
             isFlying.value = true;
             isPaused.value = false;
             connectWebSocket();
         } else {
-            throw new Error(res.data?.detail || "后端未返回成功状态");
+            throw new Error(res.data?.success || "后端未返回成功状态");
         }
     } catch (err) {
         console.error(err);
@@ -491,7 +522,6 @@ function connectWebSocket() {
         ws.close();
     }
     ws = new WebSocket("ws://localhost:8000/api/v1/drone/ws");
-
     ws.onopen = () => {
         ElMessage.success("WebSocket连接成功");
     };
@@ -511,7 +541,7 @@ function connectWebSocket() {
                 console.log("uavMarker.setPosition", lnglat);
                 uavMarker.setPosition(lnglat);
 
-                // 轨迹追加（可按需抽样）
+                // 轨迹追加
                 if (passedPolyline) {
                     const current = passedPolyline.getPath();
                     current.push(new AMap.LngLat(lnglat[0], lnglat[1]));
@@ -548,7 +578,7 @@ function connectWebSocket() {
 async function pauseFly() {
     try {
         const res = await axios.post("/v1/drone/pause");
-        if (res.data?.status === "success") {
+        if (res.data?.success) {
             isPaused.value = true;
             ElMessage.success("已暂停飞行");
         }
@@ -560,7 +590,7 @@ async function pauseFly() {
 async function resumeFly() {
     try {
         const res = await axios.post("/v1/drone/resume");
-        if (res.data?.status === "success") {
+        if (res.data?.success) {
             isPaused.value = false;
             ElMessage.success("继续飞行");
         }
@@ -572,7 +602,7 @@ async function resumeFly() {
 async function stopFly() {
     try {
         const res = await axios.post("/v1/drone/stop");
-        if (res.data?.status === "success") {
+        if (res.data?.success) {
             ElMessage.success("终止飞行成功");
         }
     } catch (e) {
@@ -603,35 +633,80 @@ onUnmounted(() => {
     min-height: 500px;
 }
 
+/* 右侧控制面板 */
+.control-panel {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: #f8f9fb;
+    border-left: 1px solid #eee;
+}
+
+/* 状态面板样式 */
 .uav-status {
     border: 1px solid #e5e6eb;
-    border-radius: 8px;
-    padding: 10px 12px;
-    background: #fafafa;
+    border-radius: 10px;
+    padding: 12px 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
 .uav-status h3 {
     margin: 0 0 8px 0;
-    font-size: 14px;
+    font-size: 15px;
+    font-weight: 600;
     color: #333;
 }
 
+.uav-status div {
+    font-size: 13px;
+    color: #444;
+    margin-bottom: 4px;
+}
+
+/* 卡片式小节 */
+.card-section {
+    border: 1px solid #e5e6eb;
+    border-radius: 10px;
+    background: #fff;
+    padding: 12px 16px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.card-section h4 {
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+/* 飞行参数滑块 */
 .uav-params {
     display: flex;
+    flex-direction: column;
     gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
 }
 
 .param-item {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .param-item .label {
-    width: 90px;
     color: #666;
     font-size: 13px;
+}
+
+/* 控制按钮区 */
+.control-buttons .el-button {
+    width: 100%;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.control-buttons .el-row {
+    row-gap: 10px;
 }
 </style>
