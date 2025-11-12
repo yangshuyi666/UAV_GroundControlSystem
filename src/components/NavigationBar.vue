@@ -51,11 +51,22 @@
 
         <el-menu-item index="4">
             <el-icon>
-                <Setting />
+                <CircleClose />
             </el-icon>
-            <span>设置</span>
+            <span>退出</span>
         </el-menu-item>
     </el-menu>
+
+    <!--退出确认弹窗 -->
+    <el-dialog v-model="logoutDialogVisible" title="确认退出" width="320px" align-center>
+        <span>确定要退出当前账号吗？</span>
+        <template #footer>
+            <span class="dialog-footer">
+                <el-button @click="logoutDialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="confirmLogout">确认</el-button>
+            </span>
+        </template>
+    </el-dialog>
 </template>
 
 <script lang="ts" setup>
@@ -66,47 +77,51 @@ import {
     Picture as IconPicture,
     Menu as IconMenu,
     List,
-    Setting,
+    CircleClose,
     HomeFilled,
-    View as IconView
+    View as IconView,
 } from "@element-plus/icons-vue";
 
 const activeIndex = ref("1");
-
-// 引入 store 和 router
 const store = useStore();
 const router = useRouter();
 
-// 处理菜单选择事件
+// 控制退出确认弹窗显示
+const logoutDialogVisible = ref(false);
+
+// 菜单点击事件
 const handleSelect = (key: string, keyPath: string[]) => {
     switch (key) {
-        // ----- 顶部一级菜单 -----
         case "1":
-            router.push("/"); // 首页
-            break;
-        case "4":
-            router.push("/settings"); // 设置
+            router.push("/");
             break;
 
-        // ----- 数据库子菜单 -----
         case "2-1":
             router.push("/flightRecord");
             break;
+
         case "2-2":
             router.push("/photoAlbum");
             break;
 
-        // ----- 地图模式：更新 store -----
-        case "3-1": // 标准模式
+        case "3-1":
             store.commit("setMapStyle", "normal");
             break;
-        case "3-2": // 卫星模式
+        case "3-2":
             store.commit("setMapStyle", "satellite");
             break;
 
-        default:
+        case "4":
+            logoutDialogVisible.value = true;
             break;
     }
+};
+
+//确认退出函数
+const confirmLogout = () => {
+    logoutDialogVisible.value = false;
+    localStorage.removeItem("userID");
+    router.push("/login");
 };
 </script>
 
@@ -125,9 +140,6 @@ const handleSelect = (key: string, keyPath: string[]) => {
     font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
 }
 
-/* =================== */
-/*   Logo与标题         */
-/* =================== */
 .logo-item {
     margin-right: auto !important;
     display: flex;
@@ -147,9 +159,6 @@ const handleSelect = (key: string, keyPath: string[]) => {
     color: #007acc;
 }
 
-/* =================== */
-/*   菜单文字样式       */
-/* =================== */
 .el-menu-item,
 .el-sub-menu__title {
     font-size: 14px;
@@ -165,7 +174,6 @@ const handleSelect = (key: string, keyPath: string[]) => {
     color: #007acc;
 }
 
-/* 选中项（下划线高亮） */
 .el-menu-item.is-active {
     color: #007acc !important;
     border-bottom: 2px solid #007acc;
@@ -173,9 +181,6 @@ const handleSelect = (key: string, keyPath: string[]) => {
     font-weight: 600;
 }
 
-/* =================== */
-/*   图标大小与间距     */
-/* =================== */
 .el-icon {
     margin-right: 6px;
     font-size: 16px;
@@ -183,9 +188,6 @@ const handleSelect = (key: string, keyPath: string[]) => {
     color: inherit;
 }
 
-/* =================== */
-/*   子菜单样式         */
-/* =================== */
 .el-menu--popup {
     background-color: #ffffff !important;
     border: 1px solid #e4e7ed;
@@ -196,7 +198,6 @@ const handleSelect = (key: string, keyPath: string[]) => {
     background-color: #f0f7ff !important;
     color: #007acc !important;
 }
-
 
 .el-menu--horizontal>.el-menu-item:nth-child(1) {
     margin-right: auto;

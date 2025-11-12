@@ -5,6 +5,8 @@
         </el-col>
 
         <el-col :span="8" class="control-panel">
+            <Camera />
+
             <!-- 无人机状态面板 -->
             <div class="uav-status">
                 <h3>无人机状态（用户ID：{{ userId }}）</h3>
@@ -46,10 +48,10 @@
 
             <!-- 飞行参数滑块 -->
             <div class="uav-params card-section">
-                <h4>飞行参数设置</h4>
                 <div class="param-item">
                     <span class="label">速度 (km/h)</span>
-                    <el-slider v-model="speed" :min="0.5" :max="20" :step="0.5" show-input input-size="small" />
+                    <el-slider v-model="speed" :min="10" :max="100" :step="1" show-input input-size="small"
+                        @change="handleSpeedChange" />
                 </div>
             </div>
 
@@ -95,6 +97,14 @@
             </div>
         </el-col>
     </el-row>
+    <el-row class="joystick-row">
+        <el-col :span="12">
+            <div id="left_joystick"></div>
+        </el-col>
+        <el-col :span="12">
+            <div id="right_joystick"></div>
+        </el-col>
+    </el-row>
 </template>
 
 <script setup>
@@ -102,7 +112,8 @@ import { onMounted, ref, watch, onUnmounted } from "vue";
 import { useStore } from "vuex";
 import { ElMessage } from "element-plus";
 import axios from "@/api/request";
-
+import Camera from "./Camera.vue";
+import nipplejs from "nipplejs";
 import StartIcon from "@/assets/StartPoint.png";
 import EndIcon from "@/assets/EndPoint.png";
 import MidIcon from "@/assets/MidPoint.png";
@@ -127,7 +138,7 @@ const isFlying = ref(false);
 const isPaused = ref(false);
 const uavStatus = ref(null);
 const userId = ref(Number(localStorage.getItem("userID")) || 3);
-const speed = ref(1);
+const speed = ref(10);
 
 // ========== 初始化地图 ==========
 onMounted(() => {
@@ -161,8 +172,43 @@ onMounted(() => {
     });
 
     updateMapStyle(store.state.mapStyle);
-    setTimeout(restorePlanningData, 500);
+
+    //左摇杆：用于控制无人机上升下降、旋转
+    const left = nipplejs.create({
+        zone: document.getElementById("left_joystick"),
+        mode: "static",
+        position: { left: "50%", top: "50%" },
+        color: "gray",
+    });
+
+    left.on("move", (evt, data) => {
+        if (data.direction) {
+            console.log(`左摇杆: ${data.direction.angle}`);
+        }
+    });
+
+    // 右摇杆：用于控制摄像头旋转或高度
+    const right = nipplejs.create({
+        zone: document.getElementById("right_joystick"),
+        mode: "static",
+        position: { left: "50%", top: "50%" },
+        color: "gray",
+    });
+
+    right.on("move", (evt, data) => {
+        if (data.direction) {
+            console.log(`右摇杆: ${data.direction.angle}`);
+        }
+    });
 });
+
+window.addEventListener("beforeunload", (event) => {
+    // 判断是关闭标签页（或浏览器）而不是刷新
+    if (performance.getEntriesByType("navigation")[0].type !== "reload") {
+        localStorage.removeItem("planningData");
+    }
+});
+
 
 // ========== 图层样式监听 ==========
 watch(() => store.state.mapStyle, (newStyle) => updateMapStyle(newStyle));
@@ -177,6 +223,30 @@ function updateMapStyle(style) {
         if (!map.hasLayer || map.hasLayer(satelliteLayer)) map.remove(satelliteLayer);
     }
 }
+
+// 速度变化处理函数
+const handleSpeedChange = async (newSpeed) => {
+    try {
+        // 调用后端速度更新接口
+        const res = await axios.post("/v1/drone/speed", null, {
+            params: {
+                speed: newSpeed
+            }
+        });
+
+        if (res.data?.success) {
+
+        } else {
+            ElMessage.error(`更新速度失败: ${res.data?.message || '未知错误'}`);
+            // 恢复到之前的有效值
+            speed.value = speed.value;
+        }
+    } catch (err) {
+        ElMessage.error("网络错误，无法更新速度");
+        // 恢复到之前的有效值
+        speed.value = speed.value;
+    }
+};
 
 // ========================================================================
 // 规划模式控制
@@ -495,13 +565,12 @@ async function startFly() {
     try {
         // 后端预期为 [lat, lng]
         const pathLatLng = pathLngLat.map(p => [p.lat, p.lng]);
-        console.log(pathLatLng);
         const res = await axios.post("/v1/drone/path", {
             user_id: userId.value,
             path: pathLatLng,
             speed: speed.value
         });
-        console.log(res.data);
+
         if (res.data?.success) {
             ElMessage.success("路径已发送，无人机开始飞行");
             isFlying.value = true;
@@ -538,7 +607,7 @@ function connectWebSocket() {
             // 更新 UAV 位置（后端推送为 lat/lng，AMap 需要 [lng, lat]）
             if (uavMarker) {
                 const lnglat = [data.lng, data.lat];
-                console.log("uavMarker.setPosition", lnglat);
+                // console.log("uavMarker.setPosition", lnglat);
                 uavMarker.setPosition(lnglat);
 
                 // 轨迹追加
@@ -633,21 +702,41 @@ onUnmounted(() => {
     min-height: 500px;
 }
 
+.joystick-row {
+    height: 140px;
+    /* 限制整体高度 */
+    background: #f7f9fc;
+    border-top: 1px solid #e5e6eb;
+    display: flex;
+    align-items: center;
+}
+
+/* 左右两个摇杆区样式 */
+#left_joystick,
+#right_joystick {
+    width: 200px;
+    height: 120px;
+    margin: auto;
+    position: relative;
+}
+
 /* 右侧控制面板 */
 .control-panel {
-    padding: 20px;
+    padding: 10px 20px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 15px;
     background: #f8f9fb;
     border-left: 1px solid #eee;
+    max-height: 800px;
+    overflow-y: auto;
 }
 
 /* 状态面板样式 */
 .uav-status {
     border: 1px solid #e5e6eb;
     border-radius: 10px;
-    padding: 12px 16px;
+    padding: 10px 12px;
     background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }

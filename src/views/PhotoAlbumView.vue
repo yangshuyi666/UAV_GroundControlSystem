@@ -145,16 +145,27 @@ onMounted(() => {
     box-shadow: 0 0 6px rgba(0, 0, 0, 0.05);
 }
 
+.photo-scroll .el-scrollbar__wrap {
+    overscroll-behavior: contain;
+}
+
 .photo-list-wrapper {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 0 16px;
+    width: 100%;
+    padding: 0 20px;
+    box-sizing: border-box;
 }
 
 .photo-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: 20px;
+}
+
+
+@media (max-width: 800px) {
+    .photo-list {
+        grid-template-columns: 1fr;
+    }
 }
 
 .empty {

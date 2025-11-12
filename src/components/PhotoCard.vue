@@ -1,7 +1,8 @@
 <template>
     <el-card class="photo-card" shadow="hover">
         <el-image :src="photo.frame_preview" fit="cover" lazy class="photo-img"
-            :preview-src-list="[photo.frame_preview]" />
+            :preview-src-list="[photo.frame_preview]" @show="disableScroll" @close="enableScroll" />
+
 
         <div class="photo-info">
             <div class="row">
@@ -23,14 +24,14 @@
         </div>
 
         <div class="actions">
-            <el-button type="danger" size="small" plain @click="handleDelete">
-                删除
-            </el-button>
             <el-button type="primary" size="small" plain @click="handleDownload">
                 下载
             </el-button>
             <el-button size="small" plain @click="handleEditDesc">
                 修改描述
+            </el-button>
+            <el-button type="danger" size="small" plain @click="handleDelete">
+                删除
             </el-button>
         </div>
     </el-card>
@@ -39,6 +40,20 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue'
 import { ElMessageBox } from 'element-plus'
+
+const disableScroll = () => {
+    document.body.style.overflow = 'hidden'
+    const wrap = document.querySelector('.el-scrollbar__wrap')
+    if (wrap) wrap.style.overflow = 'hidden'
+}
+
+const enableScroll = () => {
+    document.body.style.overflow = ''
+    const wrap = document.querySelector('.el-scrollbar__wrap')
+    if (wrap) wrap.style.overflow = 'auto'
+}
+
+
 
 const props = defineProps({
     photo: {
@@ -77,16 +92,16 @@ const handleEditDesc = async () => {
 </script>
 
 <style scoped>
-/* 宽度改为 100%，用于纵向列表单列展示 */
 .photo-card {
-    width: 100%;
+    background-color: #fff;
     border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
     overflow: hidden;
     transition: transform 0.2s ease;
 }
 
 .photo-card:hover {
-    transform: translateY(-2px);
+    transform: translateY(-4px);
 }
 
 .photo-img {
