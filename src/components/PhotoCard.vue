@@ -27,7 +27,7 @@
             <el-button type="primary" size="small" plain @click="handleDownload">
                 下载
             </el-button>
-            <el-button size="small" plain @click="handleEditDesc">
+            <el-button size="small" type="primary" plain @click="handleEditDesc">
                 修改描述
             </el-button>
             <el-button type="danger" size="small" plain @click="handleDelete">

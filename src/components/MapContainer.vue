@@ -50,7 +50,7 @@
             <div class="uav-params card-section">
                 <div class="param-item">
                     <span class="label">速度 (km/h)</span>
-                    <el-slider v-model="speed" :min="10" :max="100" :step="1" show-input input-size="small"
+                    <el-slider v-model="speed" :min="10" :max="100" :step="5" show-input input-size="small"
                         @change="handleSpeedChange" />
                 </div>
             </div>
@@ -99,10 +99,10 @@
     </el-row>
     <el-row class="joystick-row">
         <el-col :span="12">
-            <div id="left_joystick"></div>
+            <div id="left_joystick" :class="{ 'joystick-disabled': isFlying }"></div>
         </el-col>
         <el-col :span="12">
-            <div id="right_joystick"></div>
+            <div id="right_joystick" :class="{ 'joystick-disabled': isFlying }"></div>
         </el-col>
     </el-row>
 </template>
@@ -173,7 +173,7 @@ onMounted(() => {
 
     updateMapStyle(store.state.mapStyle);
 
-    //左摇杆：用于控制无人机上升下降、旋转
+    // 左摇杆：用于控制无人机上升下降、旋转
     const left = nipplejs.create({
         zone: document.getElementById("left_joystick"),
         mode: "static",
@@ -181,13 +181,133 @@ onMounted(() => {
         color: "gray",
     });
 
+    // 高度控制相关变量
+    let altitudeControlTimer = null;
+    let currentRate = 0;
+    const MAX_RATE = 0.2; // 最大高度变化速率（米/秒）
+
+    // 方向角控制相关变量
+    let pitchControlTimer = null;
+    let currentPitchDelta = 0;
+    const MAX_PITCH_DELTA = 0.1; // 最大方向角变化量（度/每次调整）
+
     left.on("move", (evt, data) => {
+        // 检查摇杆方向
         if (data.direction) {
-            console.log(`左摇杆: ${data.direction.angle}`);
+            // 上下方向控制高度
+            if (data.direction.angle === "up" || data.direction.angle === "down") {
+                const force = data.force; // 摇杆力度 0-1
+                // 计算高度变化速率
+                currentRate = data.direction.angle === "up"
+                    ? MAX_RATE * force
+                    : -MAX_RATE * force;
+
+                // 启动或保持高度控制定时器
+                if (!altitudeControlTimer) {
+                    controlAltitudeRate(currentRate);
+                    altitudeControlTimer = setInterval(() => {
+                        controlAltitudeRate(currentRate);
+                    }, 100); // 每100ms发送一次指令
+                }
+
+                // 停止方向角控制（如果正在运行）
+                stopPitchControl();
+            }
+            // 左右方向控制旋转（方向角）
+            else if (data.direction.angle === "left" || data.direction.angle === "right") {
+                const force = data.force; // 摇杆力度 0-1
+                // 计算方向角变化量（右为正，左为负）
+                currentPitchDelta = data.direction.angle === "right"
+                    ? MAX_PITCH_DELTA * force
+                    : -MAX_PITCH_DELTA * force;
+
+                // 启动或保持方向角控制定时器
+                if (!pitchControlTimer) {
+                    controlPitch(currentPitchDelta);
+                    pitchControlTimer = setInterval(() => {
+                        controlPitch(currentPitchDelta);
+                    }, 100); // 每100ms发送一次指令
+                }
+
+                // 停止高度控制（如果正在运行）
+                stopAltitudeControl();
+            }
+        } else {
+            // 不在有效方向时，停止所有控制
+            stopAltitudeControl();
+            stopPitchControl();
         }
     });
 
-    // 右摇杆：用于控制摄像头旋转或高度
+    left.on("end", () => {
+        // 摇杆释放时，停止所有控制
+        stopAltitudeControl();
+        stopPitchControl();
+    });
+
+    /**
+     * 停止高度控制
+     */
+    function stopAltitudeControl() {
+        if (altitudeControlTimer) {
+            clearInterval(altitudeControlTimer);
+            altitudeControlTimer = null;
+            currentRate = 0;
+            controlAltitudeRate(0);
+        }
+    }
+
+    /**
+     * 停止方向角控制
+     */
+    function stopPitchControl() {
+        if (pitchControlTimer) {
+            clearInterval(pitchControlTimer);
+            pitchControlTimer = null;
+            currentPitchDelta = 0;
+            controlPitch(0);
+        }
+    }
+
+    /**
+     * 控制无人机高度变化率
+     */
+    const controlAltitudeRate = async (rate) => {
+        try {
+            const res = await axios.post("/v1/drone/altitude", null, {
+                params: { rate: rate }
+            });
+
+            if (res.data?.success) {
+                console.log(`高度控制指令发送成功: ${rate.toFixed(2)}米/秒`);
+            } else {
+                console.error(`高度控制失败: ${res.data?.message}`);
+            }
+        } catch (err) {
+            console.error("高度控制请求失败", err);
+        }
+    };
+
+    /**
+     * 控制无人机方向角变化
+     */
+    const controlPitch = async (delta) => {
+        try {
+            const res = await axios.post("/v1/drone/pitch", null, {
+                params: { delta: delta }
+            });
+
+            if (res.data?.success) {
+                console.log(`方向角控制指令发送成功: ${delta.toFixed(2)}度`);
+            } else {
+                console.error(`方向角控制失败: ${res.data?.message}`);
+            }
+        } catch (err) {
+            console.error("方向角控制请求失败", err);
+        }
+    };
+
+    // 右摇杆：支持实时切换方向
     const right = nipplejs.create({
         zone: document.getElementById("right_joystick"),
         mode: "static",
@@ -195,10 +315,73 @@ onMounted(() => {
         color: "gray",
     });
 
+    // 移动控制定时器（仅用于存储当前定时器ID）
+    let moveControlTimer = null;
+    // 存储最新的方向和力度（供定时器使用）
+    let currentDirection = "";
+    let currentForce = 0;
+
+    // 发送移动指令（使用最新的方向和力度）
+    const controlMove = async () => {
+        try {
+            const res = await axios.post("/v1/drone/move", null, {
+                params: {
+                    direction: currentDirection,
+                    force: currentForce
+                }
+            });
+            if (res.data?.success) {
+                console.log(`移动成功：方向=${currentDirection}，力度=${currentForce.toFixed(2)}`);
+            } else {
+                console.error(`移动失败：${res.data?.message}`);
+            }
+        } catch (err) {
+            console.error("移动请求失败", err);
+        }
+    };
+
+    // 停止移动
+    function stopMoveControl() {
+        if (moveControlTimer) {
+            clearInterval(moveControlTimer);
+            moveControlTimer = null;
+            currentDirection = "";
+            currentForce = 0;
+            controlMove(); // 发送停止指令
+        }
+    }
+
     right.on("move", (evt, data) => {
         if (data.direction) {
-            console.log(`右摇杆: ${data.direction.angle}`);
+            // 1. 更新最新的方向和力度（关键：实时刷新）
+            const rawForce = data.force || 0;
+            currentForce = Math.max(0, Math.min(1, rawForce)); // 限制在0~1
+
+            switch (data.direction.angle) {
+                case "up": currentDirection = "forward"; break;
+                case "down": currentDirection = "backward"; break;
+                case "left": currentDirection = "left"; break;
+                case "right": currentDirection = "right"; break;
+                default:
+                    stopMoveControl();
+                    return;
+            }
+
+            // 2. 每次移动时先清除旧定时器，再创建新定时器（确保使用最新参数）
+            if (moveControlTimer) {
+                clearInterval(moveControlTimer);
+            }
+            // 立即发送一次最新指令
+            controlMove();
+            // 创建新定时器，持续发送最新参数
+            moveControlTimer = setInterval(controlMove, 100);
+        } else {
+            stopMoveControl();
         }
+    });
+
+    right.on("end", () => {
+        stopMoveControl();
     });
 });
 
@@ -206,6 +389,7 @@ window.addEventListener("beforeunload", (event) => {
     // 判断是关闭标签页（或浏览器）而不是刷新
     if (performance.getEntriesByType("navigation")[0].type !== "reload") {
         localStorage.removeItem("planningData");
+        localStorage.removeItem("userID");
     }
 });
 
@@ -673,6 +857,12 @@ async function stopFly() {
         const res = await axios.post("/v1/drone/stop");
         if (res.data?.success) {
             ElMessage.success("终止飞行成功");
+            // if (uavMarker) {
+            //     map.remove(uavMarker);
+            // }
+            // if (passedPolyline) {
+            //     map.remove(passedPolyline);
+            // }
         }
     } catch (e) {
         ElMessage.error("终止失败");
@@ -718,6 +908,14 @@ onUnmounted(() => {
     height: 120px;
     margin: auto;
     position: relative;
+}
+
+.joystick-disabled {
+    pointer-events: none;
+    /* 禁止鼠标和触控事件 */
+    opacity: 0.5;
+    /* 半透明表现为“禁用状态” */
+    filter: grayscale(70%);
 }
 
 /* 右侧控制面板 */

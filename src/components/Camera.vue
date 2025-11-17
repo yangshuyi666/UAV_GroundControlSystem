@@ -50,7 +50,7 @@ const toggleCamera = async () => {
         const res = await axios.post("/v1/camera/toggle-pause");
         if (res.data.code === 200) {
             isPreviewPaused.value = res.data.data.paused;
-            ElMessage.success(res.data.message);
+            // ElMessage.success(res.data.message);
         } else {
             ElMessage.error(res.data.message || "操作失败");
         }
