@@ -10,10 +10,12 @@
             <!-- 无人机状态面板 -->
             <div class="uav-status">
                 <h3>无人机状态（用户ID：{{ userId }}）</h3>
+
                 <div v-if="uavStatus">
                     <div>经纬度：（{{ (uavStatus.lat ?? 0).toFixed(6) }}, {{ (uavStatus.lng ?? 0).toFixed(6) }}）</div>
-                    <div>高度：{{ uavStatus.altitude ?? '—' }} m</div>
+                    <div>高度：{{ uavStatus.altitude.toFixed(2) ?? '—' }} m</div>
                     <div>速度：{{ uavStatus.speed ?? '—' }} km/h</div>
+                    <div>方向角：{{ uavStatus.pitch.toFixed(2) ?? '—' }} °</div>
 
                     <!-- 电量显示 -->
                     <div>
@@ -24,7 +26,7 @@
                                     ? '#ff4d4f'
                                     : '#52c41a',
                         }">
-                            {{ uavStatus.battery ?? '—' }}%
+                            {{ uavStatus.battery.toFixed(2) ?? '—' }}%
                         </b>
                     </div>
 
@@ -42,6 +44,8 @@
                         </b>
                     </div>
                     <div>时间：{{ uavStatus.timestamp || '—' }}</div>
+                    <!-- 方向指针 -->
+                    <Compass :pitch="uavStatus.pitch" />
                 </div>
                 <div v-else>等待连接或飞行未开始</div>
             </div>
@@ -49,7 +53,7 @@
             <!-- 飞行参数滑块 -->
             <div class="uav-params card-section">
                 <div class="param-item">
-                    <span class="label">速度 (km/h)</span>
+                    <span class="label">速度 (km/h，仅自动模式下设置有效)</span>
                     <el-slider v-model="speed" :min="10" :max="100" :step="5" show-input input-size="small"
                         @change="handleSpeedChange" />
                 </div>
@@ -57,6 +61,7 @@
 
             <!-- 控制按钮 -->
             <div class="control-buttons card-section">
+
                 <el-row :gutter="10">
                     <el-col :span="8">
                         <el-button id="PlanStart" type="primary" plain block
@@ -72,7 +77,7 @@
                     </el-col>
                     <el-col :span="8">
                         <el-button id="StartFly" type="success" block @click="startFly"
-                            :disabled="store.state.isPlanning">
+                            :disabled="store.state.isPlanning || isFlying">
                             开始飞行
                         </el-button>
                     </el-col>
@@ -112,8 +117,9 @@ import { onMounted, ref, watch, onUnmounted } from "vue";
 import { useStore } from "vuex";
 import { ElMessage } from "element-plus";
 import axios from "@/api/request";
-import Camera from "./Camera.vue";
+import Camera from "@/components/Camera.vue";
 import nipplejs from "nipplejs";
+import Compass from "@/components/Compass.vue";
 import StartIcon from "@/assets/StartPoint.png";
 import EndIcon from "@/assets/EndPoint.png";
 import MidIcon from "@/assets/MidPoint.png";
@@ -139,6 +145,7 @@ const isPaused = ref(false);
 const uavStatus = ref(null);
 const userId = ref(Number(localStorage.getItem("userID")) || 3);
 const speed = ref(10);
+
 
 // ========== 初始化地图 ==========
 onMounted(() => {
@@ -172,6 +179,7 @@ onMounted(() => {
     });
 
     updateMapStyle(store.state.mapStyle);
+    getStatus();
 
     // 左摇杆：用于控制无人机上升下降、旋转
     const left = nipplejs.create({
@@ -279,7 +287,7 @@ onMounted(() => {
             });
 
             if (res.data?.success) {
-                console.log(`高度控制指令发送成功: ${rate.toFixed(2)}米/秒`);
+                // console.log(`高度控制指令发送成功: ${rate.toFixed(2)}米/秒`);
             } else {
                 console.error(`高度控制失败: ${res.data?.message}`);
             }
@@ -298,7 +306,7 @@ onMounted(() => {
             });
 
             if (res.data?.success) {
-                console.log(`方向角控制指令发送成功: ${delta.toFixed(2)}度`);
+                // console.log(`方向角控制指令发送成功: ${delta.toFixed(2)}度`);
             } else {
                 console.error(`方向角控制失败: ${res.data?.message}`);
             }
@@ -331,7 +339,7 @@ onMounted(() => {
                 }
             });
             if (res.data?.success) {
-                console.log(`移动成功：方向=${currentDirection}，力度=${currentForce.toFixed(2)}`);
+                // console.log(`移动成功：方向=${currentDirection}，力度=${currentForce.toFixed(2)}`);
             } else {
                 console.error(`移动失败：${res.data?.message}`);
             }
@@ -383,7 +391,11 @@ onMounted(() => {
     right.on("end", () => {
         stopMoveControl();
     });
+
+    restorePlanningData();
 });
+
+
 
 window.addEventListener("beforeunload", (event) => {
     // 判断是关闭标签页（或浏览器）而不是刷新
@@ -441,11 +453,11 @@ function startPlanning() {
         return;
     }
 
-    // 清除无人机与飞行轨迹
-    if (uavMarker) {
-        map.remove(uavMarker);
-        uavMarker = null;
-    }
+    // 清除飞行轨迹
+    // if (uavMarker) {
+    //     map.remove(uavMarker);
+    //     uavMarker = null;
+    // }
     if (passedPolyline) {
         map.remove(passedPolyline);
         passedPolyline = null;
@@ -622,17 +634,17 @@ function redrawPath() {
 // 清空规划
 // ========================================================================
 function clearPlanning() {
-    // 清除无人机与飞行轨迹
-    if (uavMarker) {
-        map.remove(uavMarker);
-        uavMarker = null;
-    }
+    // 清除飞行轨迹
+    // if (uavMarker) {
+    //     map.remove(uavMarker);
+    //     uavMarker = null;
+    // }
     if (passedPolyline) {
         map.remove(passedPolyline);
         passedPolyline = null;
     }
     if (markers.length === 0 && !line && !totalText) {
-        ElMessage.info("当前没有内容可清空。");
+        // ElMessage.info("当前没有内容可清空。");
         return;
     }
 
@@ -717,10 +729,10 @@ async function startFly() {
     }
 
     // 清理旧 UAV & 轨迹
-    if (uavMarker) {
-        map.remove(uavMarker);
-        uavMarker = null;
-    }
+    // if (uavMarker) {
+    //     map.remove(uavMarker);
+    //     uavMarker = null;
+    // }
     if (passedPolyline) {
         map.remove(passedPolyline);
         passedPolyline = null;
@@ -731,13 +743,12 @@ async function startFly() {
     const startPos = pathLngLat[0];
 
     // 创建 UAV Marker 与已飞行轨迹
-    const UAVIcon = new AMap.Icon({ image: uavIcon, imageSize: new AMap.Size(32, 32) });
-    uavMarker = new AMap.Marker({
-        map,
-        position: startPos,
-        icon: UAVIcon,
-        anchor: "bottom-center",
-    });
+    // uavMarker = new AMap.Marker({
+    //     map,
+    //     position: startPos,
+    //     icon: new AMap.Icon({ image: uavIcon, imageSize: new AMap.Size(32, 32) }),
+    //     anchor: "bottom-center",
+    // });
     passedPolyline = new AMap.Polyline({
         map,
         strokeColor: "#00cc66",
@@ -768,7 +779,16 @@ async function startFly() {
         ElMessage.error("发送路径失败");
     }
 }
+async function getStatus() {
+    const res = await axios.get("/v1/drone/status");
+    if (res.data?.success) {
+        // 建立websocket长连接
+        connectWebSocket();
+    } else {
+        ElMessage.error("请检查后端服务");
+    }
 
+}
 function connectWebSocket() {
     // 关闭旧连接
     if (ws) {
@@ -804,8 +824,16 @@ function connectWebSocket() {
                     }
                 }
 
-                // 跟随视角（可注释掉）
+                // 跟随视角
                 map.setCenter(lnglat, true);
+            }
+            else {
+                uavMarker = new AMap.Marker({
+                    map,
+                    position: [data.lng, data.lat],
+                    icon: new AMap.Icon({ image: uavIcon, imageSize: new AMap.Size(32, 32) }),
+                    anchor: "bottom-center",
+                });
             }
 
             // 若后端状态返回 idle/finished，可在此重置按钮状态
@@ -856,23 +884,22 @@ async function stopFly() {
     try {
         const res = await axios.post("/v1/drone/stop");
         if (res.data?.success) {
+            isPaused.value = false;
             ElMessage.success("终止飞行成功");
             // if (uavMarker) {
             //     map.remove(uavMarker);
             // }
-            // if (passedPolyline) {
-            //     map.remove(passedPolyline);
-            // }
+            clearPlanning();
         }
     } catch (e) {
         ElMessage.error("终止失败");
     } finally {
         isFlying.value = false;
         isPaused.value = false;
-        if (ws) {
-            try { ws.close(1000, "user stop"); } catch { }
-            ws = null;
-        }
+        // if (ws) {
+        //     try { ws.close(1000, "user stop"); } catch { }
+        //     ws = null;
+        // }
     }
 }
 

@@ -19,3 +19,7 @@ export const exportPhotoById = (image_id) =>
 // 修改图片描述（PUT）
 export const updatePhotoDesc = (image_id, desc) =>
     axios.put(`/v1/images/camera/image/${image_id}/desc`, { desc })
+
+//分析图片
+export const analyzePhoto = (image_id) =>
+    axios.get(`/v1/images/camera/analyze/${image_id}`)

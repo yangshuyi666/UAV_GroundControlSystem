@@ -15,7 +15,7 @@
             <div class="photo-list-wrapper">
                 <div class="photo-list">
                     <PhotoCard v-for="photo in photos" :key="photo.image_id" :photo="photo" @delete="deletePhoto"
-                        @download="downloadPhoto" @edit="editPhotoDesc" />
+                        @download="downloadPhoto" @edit="editPhotoDesc" @analyze="analyzeImage" />
                 </div>
 
                 <div v-if="photos.length === 0 && !loading" class="empty">
@@ -30,7 +30,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import PhotoCard from '@/components/PhotoCard.vue'
-import { getPhotos, deletePhotoById, exportPhotoById, updatePhotoDesc } from '@/api/Photo.js'
+import { getPhotos, deletePhotoById, exportPhotoById, updatePhotoDesc, analyzePhoto } from '@/api/Photo.js'
 
 const photos = ref([])
 const loading = ref(false)
@@ -106,7 +106,21 @@ const editPhotoDesc = async ({ image_id, newDesc }) => {
         ElMessage.error('修改描述失败')
     }
 }
-
+// 分析图片
+const analyzeImage = async (image_id) => {
+    // try {
+    //     const res = await analyzePhoto(image_id)
+    //     if (res.data?.code === 200) {
+    //         const idx = photos.value.findIndex((p) => p.image_id === image_id)
+    //         if (idx !== -1) {
+    //             photos.value[idx].desc = res.data.data.new_desc
+    //         }
+    //     } else throw new Error(res.data?.message || '分析失败')
+    // } catch (err) {
+    //     console.error(err)
+    //     ElMessage.error('分析失败')
+    // }
+}
 onMounted(() => {
     loadPhotos()
 })
