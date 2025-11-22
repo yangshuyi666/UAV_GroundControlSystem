@@ -26,7 +26,7 @@
 
             <!-- 分析 -->
             <el-tooltip content="分析" placement="top">
-                <el-button type="primary" :icon="HelpFilled" circle @click="analyzeImage" />
+                <el-button type="primary" :icon="Service" circle @click="analyzeImage" />
             </el-tooltip>
 
             <!-- 修改描述 -->
@@ -45,7 +45,7 @@
 <script setup>
 import { defineProps, defineEmits } from "vue";
 import { ElMessageBox } from "element-plus";
-import { Delete, Edit, Download, HelpFilled } from "@element-plus/icons-vue";
+import { Delete, Edit, Download, Service } from "@element-plus/icons-vue";
 
 const disableScroll = () => {
     document.body.style.overflow = "hidden";

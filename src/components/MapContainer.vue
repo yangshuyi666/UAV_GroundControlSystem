@@ -325,11 +325,16 @@ onMounted(() => {
 
     // 移动控制定时器（仅用于存储当前定时器ID）
     let moveControlTimer = null;
+    // 心跳检测相关：记录最后一次发送指令的时间戳、心跳定时器ID
+    let lastMoveTimestamp = 0;
+    let heartbeatTimer = null;
+    const MOVE_TIMEOUT = 300;
+
     // 存储最新的方向和力度（供定时器使用）
     let currentDirection = "";
     let currentForce = 0;
 
-    // 发送移动指令（使用最新的方向和力度）
+    // 发送移动指令（新增：处理返回的状态，更新界面）
     const controlMove = async () => {
         try {
             const res = await axios.post("/v1/drone/move", null, {
@@ -339,31 +344,60 @@ onMounted(() => {
                 }
             });
             if (res.data?.success) {
-                // console.log(`移动成功：方向=${currentDirection}，力度=${currentForce.toFixed(2)}`);
+                // 关键：从返回结果中获取状态，更新界面（比如速度、电量显示）
+                const { speed, remaining_battery, is_flying } = res.data;
+                console.log(`状态更新：速度=${speed}m/s，电量=${remaining_battery}%，飞行中=${is_flying}`);
+                // 这里可以添加界面更新逻辑，比如：
+                // document.getElementById("drone-speed").textContent = speed;
+                // document.getElementById("drone-battery").textContent = remaining_battery;
             } else {
                 console.error(`移动失败：${res.data?.message}`);
+                // 失败时也强制停止（比如电量耗尽）
+                if (res.data?.message.includes("电量耗尽")) {
+                    stopMoveControl();
+                }
             }
+            lastMoveTimestamp = Date.now();
         } catch (err) {
-            console.error("移动请求失败", err);
+            console.error("移动请求失败：", err);
         }
     };
 
-    // 停止移动
+    // 停止移动（彻底清理定时器，避免残留）
     function stopMoveControl() {
+        // 1. 清除移动定时器（关键：避免残留定时器继续发送指令）
         if (moveControlTimer) {
             clearInterval(moveControlTimer);
-            moveControlTimer = null;
-            currentDirection = "";
-            currentForce = 0;
-            controlMove(); // 发送停止指令
+            moveControlTimer = null; // 置空，确保下次能重新创建
+        }
+        // 2. 清除心跳定时器
+        if (heartbeatTimer) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null; // 置空
+        }
+        // 3. 强制设置停止状态并发送指令
+        currentDirection = "";
+        currentForce = 0;
+        console.log("发送停止移动指令");
+        controlMove();
+    }
+
+    // 心跳检测函数：定期检查是否超时，超时则强制停止
+    function checkMoveTimeout() {
+        const now = Date.now();
+        const timeDiff = now - lastMoveTimestamp;
+        if (timeDiff > MOVE_TIMEOUT && currentForce > 0) {
+            console.log(`移动超时（${timeDiff}ms），强制停止`);
+            stopMoveControl();
         }
     }
 
+    // 摇杆移动事件（修复：确保定时器能重新创建）
     right.on("move", (evt, data) => {
         if (data.direction) {
-            // 1. 更新最新的方向和力度（关键：实时刷新）
+            // 更新最新方向和力度
             const rawForce = data.force || 0;
-            currentForce = Math.max(0, Math.min(1, rawForce)); // 限制在0~1
+            currentForce = Math.max(0, Math.min(1, rawForce));
 
             switch (data.direction.angle) {
                 case "up": currentDirection = "forward"; break;
@@ -375,20 +409,36 @@ onMounted(() => {
                     return;
             }
 
-            // 2. 每次移动时先清除旧定时器，再创建新定时器（确保使用最新参数）
+            // 关键：无论之前是否有定时器，先清除再创建（避免残留）
             if (moveControlTimer) {
                 clearInterval(moveControlTimer);
             }
-            // 立即发送一次最新指令
-            controlMove();
-            // 创建新定时器，持续发送最新参数
             moveControlTimer = setInterval(controlMove, 100);
+
+            // 启动心跳定时器
+            if (!heartbeatTimer) {
+                heartbeatTimer = setInterval(checkMoveTimeout, 50);
+            }
+
+            lastMoveTimestamp = Date.now();
         } else {
             stopMoveControl();
         }
     });
 
-    right.on("end", () => {
+    // 覆盖所有停止场景
+    right.on("end", () => stopMoveControl());
+    right.on("cancel", () => stopMoveControl());
+    right.on("destroy", () => stopMoveControl());
+    right.on("remove", () => stopMoveControl());
+
+    // 浏览器焦点和页面卸载兜底
+    window.addEventListener("blur", () => {
+        if (currentForce > 0) {
+            stopMoveControl();
+        }
+    });
+    window.addEventListener("beforeunload", () => {
         stopMoveControl();
     });
 

@@ -108,18 +108,18 @@ const editPhotoDesc = async ({ image_id, newDesc }) => {
 }
 // 分析图片
 const analyzeImage = async (image_id) => {
-    // try {
-    //     const res = await analyzePhoto(image_id)
-    //     if (res.data?.code === 200) {
-    //         const idx = photos.value.findIndex((p) => p.image_id === image_id)
-    //         if (idx !== -1) {
-    //             photos.value[idx].desc = res.data.data.new_desc
-    //         }
-    //     } else throw new Error(res.data?.message || '分析失败')
-    // } catch (err) {
-    //     console.error(err)
-    //     ElMessage.error('分析失败')
-    // }
+    try {
+        const res = await analyzePhoto(image_id)
+        if (res.data?.code === 200) {
+            const idx = photos.value.findIndex((p) => p.image_id === image_id)
+            if (idx !== -1) {
+                photos.value[idx].desc = res.data.data.new_desc
+            }
+        } else throw new Error(res.data?.message || '分析失败')
+    } catch (err) {
+        console.error(err)
+        ElMessage.error('分析失败')
+    }
 }
 onMounted(() => {
     loadPhotos()
