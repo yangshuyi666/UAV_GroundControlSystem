@@ -93,11 +93,18 @@ const handleEditDesc = async () => {
             confirmButtonText: "确定",
             cancelButtonText: "取消",
             inputValue: props.photo.desc || "",
+            inputType: "textarea",
+            inputPlaceholder: "请输入图片描述",
+            inputStyle: "min-height: 260px; max-height: 360px; white-space: pre-wrap;",
+            draggable: true
         });
 
+
         emit("edit", { image_id: props.photo.image_id, newDesc: value || "" });
+
     } catch { }
 };
+
 </script>
 
 <style scoped>

@@ -12,7 +12,7 @@
 
         <el-scrollbar class="scroll" height="calc(100vh - 120px)">
             <div class="list">
-                <FlightRecordItem v-for="log in logs" :key="log.id" :log="log" @delete="deleteLog" />
+                <FlightRecordItem v-for="log in logs" :key="log.id" :log="log" class="log-item" @delete="deleteLog" />
 
                 <div v-if="logs.length === 0 && !loading" class="empty">
                     <el-empty description="暂无飞行日志" />
@@ -46,6 +46,12 @@ const loadLogs = async () => {
     loading.value = true
     try {
         const userId = Number(localStorage.getItem("userID"))
+        if (!userId) {
+            photos.value = []
+            ElMessage.warning('请登录后,再查看飞行日志')
+            return
+        }
+
         const res = await getFlightLogs({ user_id: userId, limit: limit.value })
 
         if (res.data?.success) {
@@ -101,6 +107,10 @@ onMounted(loadLogs)
 .ops {
     display: flex;
     align-items: center;
+}
+
+.log-item {
+    margin-bottom: 10px;
 }
 
 .mr-10 {

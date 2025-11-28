@@ -156,7 +156,7 @@ onMounted(() => {
 
     map = new AMap.Map("Container", {
         center: [118.790784, 31.937422],
-        zoom: 16,
+        zoom: 17,
         viewMode: "3D",
         pitch: 45,
         mapStyle: "amap://styles/normal",

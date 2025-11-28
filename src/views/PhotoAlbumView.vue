@@ -42,7 +42,7 @@ const loadPhotos = async () => {
         const userId = Number(localStorage.getItem('userID'))
         if (!userId) {
             photos.value = []
-            ElMessage.warning('未检测到用户ID，请登录后查看相册')
+            ElMessage.warning('请登录后，再查看相册')
             return
         }
 

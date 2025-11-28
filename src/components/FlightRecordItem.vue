@@ -1,27 +1,46 @@
 <template>
-    <el-card class="log-item">
-        <div class="row">
-            <!-- 信息区域 -->
-            <div class="info">
-                <p><b>ID：</b>{{ log.id }}</p>
-                <p><b>创建时间：</b>{{ log.create_time }}</p>
-                <p><b>起点：</b>({{ startPoint[1] }}, {{ startPoint[0] }})</p>
-                <p><b>终点：</b>({{ endPoint[1] }}, {{ endPoint[0] }})</p>
-            </div>
+    <div class="record-card">
+        <el-card class="log-item" shadow="hover">
+            <div class="row">
 
-            <!-- 操作区域 -->
-            <div class="ops">
-                <el-button type="primary" @click="open">复现</el-button>
-                <el-button type="danger" @click="confirmDelete">删除</el-button>
-            </div>
-        </div>
-    </el-card>
+                <!-- 信息区域 -->
+                <div class="info">
+                    <div class="title">
+                        <span class="label">飞行日志 #{{ log.id }}</span>
+                    </div>
 
-    <!-- 复现弹窗 -->
-    <el-dialog v-model="replayVisible" title="飞行日志复现" width="70%" top="5vh" @opened="onDialogOpened"
-        @closed="onDialogClosed">
-        <div ref="mapEl" class="map"></div>
-    </el-dialog>
+                    <div class="field">
+                        <span class="key">创建时间：</span>
+                        <span class="value">{{ log.create_time }}</span>
+                    </div>
+
+                    <div class="field">
+                        <span class="key">起点：</span>
+                        <span class="value">({{ startPoint[1] }}, {{ startPoint[0] }})</span>
+                    </div>
+
+                    <div class="field">
+                        <span class="key">终点：</span>
+                        <span class="value">({{ endPoint[1] }}, {{ endPoint[0] }})</span>
+                    </div>
+                </div>
+
+                <!-- 按钮区域 -->
+                <div class="ops">
+                    <el-button size="small" type="primary" @click="open">复现</el-button>
+                    <el-button size="small" type="danger" @click="confirmDelete">删除</el-button>
+                </div>
+
+            </div>
+        </el-card>
+
+        <!-- 复现弹窗 -->
+        <el-dialog v-model="replayVisible" title="飞行日志复现" width="70%" top="5vh" @opened="onDialogOpened"
+            @closed="onDialogClosed">
+            <div ref="mapEl" class="map"></div>
+        </el-dialog>
+    </div>
+
 </template>
 
 <script setup>
@@ -150,29 +169,62 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.log-item {
-    margin-bottom: 16px;
-    padding: 12px;
+.record-card {
+    padding: 16px 20px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    border: 1px solid #f0f0f0;
 }
+
+
+.log-item {
+    padding: 16px 20px;
+    border-radius: 10px;
+}
+
 
 .row {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    gap: 16px;
+    align-items: center;
 }
 
-.info p {
-    margin: 6px 0;
-    font-size: 14px;
+
+.info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.title .label {
+    font-size: 16px;
+    font-weight: 600;
     color: #333;
 }
 
+.field {
+    font-size: 14px;
+    color: #444;
+}
+
+.key {
+    font-weight: 500;
+    color: #666;
+}
+
+
 .ops {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    flex-direction: row;
+    gap: 12px;
 }
+
+.ops .el-button {
+    width: 80px;
+    height: 32px;
+}
+
 
 .map {
     width: 100%;
